@@ -109,14 +109,14 @@ public class RubyIOBuffer extends RubyObject {
     @JRubyMethod(name = "for", meta = true)
     public static IRubyObject rbFor(ThreadContext context, IRubyObject self, IRubyObject _string, Block block) {
         RubyString string = _string.convertToString();
-        int flags = string.isFrozen() ? READONLY : 0;
+        int flags = (string.isFrozen() ? READONLY : 0) | EXTERNAL;
 
         // If the string is frozen, both code paths are okay.
         // If the string is not frozen, if a block is not given, it must be frozen.
         if (!block.isGiven()) {
             // This internally returns the source string if it's already frozen.
             string = string.newFrozen();
-            flags = READONLY;
+            flags = READONLY | EXTERNAL;
         } else {
             if ((flags & READONLY) != READONLY) {
                 string.modify();
@@ -296,16 +296,32 @@ public class RubyIOBuffer extends RubyObject {
     }
 
     @JRubyMethod(name = "initialize")
-    public IRubyObject initialize(ThreadContext context, IRubyObject _size, IRubyObject flags) {
+    public IRubyObject initialize(ThreadContext context, IRubyObject _size, IRubyObject _flags) {
         int size = toInt(context, _size);
+        int flags = toInt(context, _flags);
 
-        initialize(context, new byte[size], size, toInt(context, flags), context.nil);
+        if (size < 0) throw argumentError(context, "negative buffer size (or size too big)");
+        if (flags < 0) throw argumentError(context, "negative buffer flags");
+
+        // Size 0 creates a null buffer
+        if (size == 0) {
+            initialize(context, null, 0, 0, context.nil);
+        } else {
+            initialize(context, null, size, flags, context.nil);
+        }
 
         return context.nil;
     }
 
     public IRubyObject initialize(ThreadContext context, int size) {
-        initialize(context, new byte[size], size, flagsForSize(size), context.nil);
+        if (size < 0) throw argumentError(context, "negative buffer size (or size too big)");
+
+        // Size 0 creates a null buffer
+        if (size == 0) {
+            initialize(context, null, 0, 0, context.nil);
+        } else {
+            initialize(context, new byte[size], size, flagsForSize(size), context.nil);
+        }
 
         return context.nil;
     }
