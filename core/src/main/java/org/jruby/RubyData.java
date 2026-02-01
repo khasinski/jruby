@@ -229,9 +229,47 @@ public class RubyData {
         RubyHash h = newSmallHash(context);
         for (int i = 0; i < keysAry.size(); i++) {
             IRubyObject key = keysAry.eltOk(i);
-            int memberIndex = members.indexOf(key);
-            if (memberIndex == -1) {
-                return h;
+            int memberIndex;
+
+            if (key instanceof RubySymbol) {
+                // Symbol key - look up by member name
+                memberIndex = members.indexOf(key);
+                if (memberIndex == -1) {
+                    return h;
+                }
+            } else if (key instanceof RubyString) {
+                // String key - convert to symbol for lookup, but keep string as the key
+                RubySymbol keySym = ((RubyString) key).intern();
+                memberIndex = members.indexOf(keySym);
+                if (memberIndex == -1) {
+                    return h;
+                }
+            } else {
+                // Try to use as integer position (or convert via to_int)
+                int pos;
+                if (key instanceof RubyInteger) {
+                    pos = ((RubyInteger) key).getIntValue();
+                } else if (key.respondsTo("to_int")) {
+                    IRubyObject converted = key.callMethod(context, "to_int");
+                    if (!(converted instanceof RubyInteger)) {
+                        throw typeError(context, "can't convert " + key.getType() + " to Integer (" +
+                            key.getType() + "#to_int gives " + converted.getType() + ")");
+                    }
+                    pos = ((RubyInteger) converted).getIntValue();
+                } else {
+                    throw typeError(context, "no implicit conversion of " + key.getType() + " into Integer");
+                }
+
+                // Handle negative indices
+                if (pos < 0) {
+                    pos = accessors.length + pos;
+                }
+
+                // Check if position is valid
+                if (pos < 0 || pos >= accessors.length) {
+                    return h;
+                }
+                memberIndex = pos;
             }
             h.fastASetSmall(key, (IRubyObject) accessors[memberIndex].get(self));
         }
