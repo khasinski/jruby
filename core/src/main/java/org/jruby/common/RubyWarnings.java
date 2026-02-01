@@ -364,7 +364,8 @@ public class RubyWarnings implements IRubyWarnings, WarnCallback {
     }
 
     public enum Category {
-        EXPERIMENTAL("experimental"), DEPRECATED("deprecated"), PERFORMANCE("performance");
+        EXPERIMENTAL("experimental"), DEPRECATED("deprecated"), PERFORMANCE("performance"),
+        STRICT_UNUSED_BLOCK("strict_unused_block");
 
         private String id;
 
@@ -377,6 +378,7 @@ public class RubyWarnings implements IRubyWarnings, WarnCallback {
                 case "experimental" -> EXPERIMENTAL;
                 case "deprecated" -> DEPRECATED;
                 case "performance" -> PERFORMANCE;
+                case "strict_unused_block" -> STRICT_UNUSED_BLOCK;
                 default -> null;
             };
         }

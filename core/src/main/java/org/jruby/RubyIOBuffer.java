@@ -292,16 +292,20 @@ public class RubyIOBuffer extends RubyObject {
 
     @JRubyMethod(name = "initialize")
     public IRubyObject initialize(ThreadContext context, IRubyObject size) {
+        if (!(size instanceof RubyInteger)) throw typeError(context, "not an Integer");
         return initialize(context, toInt(context, size));
     }
 
     @JRubyMethod(name = "initialize")
     public IRubyObject initialize(ThreadContext context, IRubyObject _size, IRubyObject _flags) {
+        if (!(_size instanceof RubyInteger)) throw typeError(context, "not an Integer");
+        if (!(_flags instanceof RubyInteger)) throw typeError(context, "not an Integer");
+
         int size = toInt(context, _size);
         int flags = toInt(context, _flags);
 
-        if (size < 0) throw argumentError(context, "negative buffer size (or size too big)");
-        if (flags < 0) throw argumentError(context, "negative buffer flags");
+        if (size < 0) throw argumentError(context, "Size can't be negative!");
+        if (flags < 0) throw argumentError(context, "Flags can't be negative!");
 
         // Size 0 creates a null buffer
         if (size == 0) {
@@ -314,7 +318,7 @@ public class RubyIOBuffer extends RubyObject {
     }
 
     public IRubyObject initialize(ThreadContext context, int size) {
-        if (size < 0) throw argumentError(context, "negative buffer size (or size too big)");
+        if (size < 0) throw argumentError(context, "Size can't be negative!");
 
         // Size 0 creates a null buffer
         if (size == 0) {
@@ -594,8 +598,7 @@ public class RubyIOBuffer extends RubyObject {
 
     @JRubyMethod(name = "shared?")
     public IRubyObject shared_p(ThreadContext context) {
-        // no support for shared yet
-        return asBoolean(context, false);
+        return asBoolean(context, isShared());
     }
 
     private boolean isShared() {
@@ -618,6 +621,15 @@ public class RubyIOBuffer extends RubyObject {
 
     private boolean isReadonly() {
         return (flags & READONLY) == READONLY;
+    }
+
+    @JRubyMethod(name = "private?")
+    public IRubyObject private_p(ThreadContext context) {
+        return asBoolean(context, isPrivate());
+    }
+
+    private boolean isPrivate() {
+        return (flags & PRIVATE) == PRIVATE;
     }
 
     @JRubyMethod(name = "locked")
