@@ -19,6 +19,7 @@ public class RubyStackTraceElement implements java.io.Serializable {
     private final int    lineNumber;
     private final boolean binding;
     private final FrameType frameType;
+    private final int blockDepth;  // 0 for non-blocks, 1+ for nested block depth
 
     public RubyStackTraceElement(StackTraceElement element) {
         this.className = element.getClassName();
@@ -27,21 +28,27 @@ public class RubyStackTraceElement implements java.io.Serializable {
         this.lineNumber = element.getLineNumber();
         this.binding = false;
         this.frameType = FrameType.METHOD;
+        this.blockDepth = 0;
 
         this.element = element;
     }
 
     public RubyStackTraceElement(String klass, String method, String file, int line, boolean binding) {
-        this(klass, method, file, line, binding, FrameType.METHOD);
+        this(klass, method, file, line, binding, FrameType.METHOD, 0);
     }
 
     public RubyStackTraceElement(String klass, String method, String file, int line, boolean binding, FrameType frameType) {
+        this(klass, method, file, line, binding, frameType, 0);
+    }
+
+    public RubyStackTraceElement(String klass, String method, String file, int line, boolean binding, FrameType frameType, int blockDepth) {
         this.className = klass;
         this.methodName = method;
         this.fileName = (file == null) ? "unknown" : file;
         this.lineNumber = line;
         this.binding = binding;
         this.frameType = frameType;
+        this.blockDepth = blockDepth;
     }
 
     public final boolean isBinding() {
@@ -72,6 +79,10 @@ public class RubyStackTraceElement implements java.io.Serializable {
         return frameType;
     }
 
+    public final int getBlockDepth() {
+        return blockDepth;
+    }
+
     private transient StackTraceElement element;
 
     public final StackTraceElement asStackTraceElement() {
@@ -96,11 +107,25 @@ public class RubyStackTraceElement implements java.io.Serializable {
         line.cat(CommonByteLists.COLON);
         line.cat(ConvertBytes.longToByteListCached(element.getLineNumber()));
         line.cat(CommonByteLists.BACKTRACE_IN);
-        if (element.getFrameType() == FrameType.BLOCK) line.catString("block in ");
+        if (element.getFrameType() == FrameType.BLOCK) {
+            line.catString(formatBlockLabel(element.getBlockDepth()));
+        }
         line.cat(methodSym.getBytes());
         line.cat('\'');
 
         return line;
+    }
+
+    /**
+     * Format the block label prefix based on nesting depth.
+     * MRI uses: "block in " for depth 1, "block (2 levels) in " for depth 2, etc.
+     */
+    public static String formatBlockLabel(int blockDepth) {
+        if (blockDepth <= 1) {
+            return "block in ";
+        } else {
+            return "block (" + blockDepth + " levels) in ";
+        }
     }
 
     @Deprecated(since = "9.2.0.0")

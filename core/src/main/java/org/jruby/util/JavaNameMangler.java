@@ -288,6 +288,20 @@ public class JavaNameMangler {
 
     public static final String SCRIPT_METHOD_NAME = RUBY_MARKER + DELIMITER + SCRIPT_MARKER;
 
+    /**
+     * Compute the block nesting depth for a closure scope.
+     * Returns 1 for a direct block, 2 for a block inside a block, etc.
+     */
+    private static int computeBlockDepth(IRScope scope) {
+        int depth = 0;
+        IRScope current = scope;
+        while (current instanceof IRClosure) {
+            depth++;
+            current = current.getLexicalParent();
+        }
+        return depth;
+    }
+
     public static String encodeNumberedScopeForBacktrace(IRScope scope, int number) {
         return encodeScopeForBacktrace(scope) + DELIMITER + '#' + number;
     }
@@ -306,7 +320,9 @@ public class JavaNameMangler {
             } else {
                 name = ancestorScope.getId();
             }
-            base = RUBY_MARKER + DELIMITER + BLOCK_MARKER + DELIMITER + mangleMethodNameInternal(name);
+            // Compute block nesting depth (how many closures between this and the containing method/script)
+            int blockDepth = computeBlockDepth(scope);
+            base = RUBY_MARKER + DELIMITER + BLOCK_MARKER + DELIMITER + blockDepth + DELIMITER + mangleMethodNameInternal(name);
         } else if (scope instanceof IRMetaClassBody) {
             base = RUBY_MARKER + DELIMITER + METACLASS_MARKER;
         } else if (scope instanceof IRClassBody) {
@@ -339,12 +355,27 @@ public class JavaNameMangler {
             case METACLASS: return "singleton class";
             case VARARGS_WRAPPER:
             case METHOD:    return demangleMethodName(mangledTuple.get(2));
-            case BLOCK:     return ""+demangleMethodNameInternal(mangledTuple.get(2));
+            case BLOCK:     return ""+demangleMethodNameInternal(mangledTuple.get(3)); // index 3 due to blockDepth at index 2
             case CLASS:     return "<class:" + demangleMethodNameInternal(mangledTuple.get(2)) + '>';
             case MODULE:    return "<module:" + demangleMethodNameInternal(mangledTuple.get(2)) + '>';
         }
 
         return null; // not-reached
+    }
+
+    /**
+     * Decode the block depth from a mangled method tuple.
+     * Returns 0 for non-block frames, or the nesting depth (1+) for blocks.
+     */
+    public static int decodeBlockDepth(FrameType type, List<String> mangledTuple) {
+        if (type == FrameType.BLOCK && mangledTuple.size() > 2) {
+            try {
+                return Integer.parseInt(mangledTuple.get(2));
+            } catch (NumberFormatException e) {
+                return 1; // fallback for old format without depth
+            }
+        }
+        return 0;
     }
 
     public static FrameType decodeFrameTypeFromMangledName(String type) {

@@ -83,7 +83,51 @@ public class BacktraceData implements Serializable {
 
         eachBacktrace(boundMethods, (elt) -> {trace.add(elt); return trace.size() < count;});
 
+        // Post-process to compute block depths for interpreted frames
+        computeBlockDepths(trace);
+
         return trace.toArray((i) -> new RubyStackTraceElement[i]);
+    }
+
+    /**
+     * Compute block depths for interpreted block frames that don't have depth info.
+     * Compiled frames already have correct blockDepth from the mangled method name.
+     * Interpreted frames (className == "RUBY") are created with blockDepth = 0.
+     *
+     * For each block frame, we count how many block frames with the same containing
+     * method exist between this frame and the method frame itself (inclusive of current).
+     * This handles interleaved block frames from methods like Integer#times.
+     */
+    private static void computeBlockDepths(ArrayList<RubyStackTraceElement> trace) {
+        for (int i = 0; i < trace.size(); i++) {
+            RubyStackTraceElement elem = trace.get(i);
+
+            // Only process interpreted block frames that need depth computation
+            // Compiled frames already have correct depth, interpreted frames have className "RUBY"
+            if (elem.getFrameType() == FrameType.BLOCK && "RUBY".equals(elem.getClassName()) && elem.getBlockDepth() == 0) {
+                String methodName = elem.getMethodName();
+
+                // Count ALL block frames with the same method name between here and the containing method
+                // This handles interleaved frames like those from Integer#times
+                int blockCount = 0;
+                for (int j = i; j < trace.size(); j++) {
+                    RubyStackTraceElement frame = trace.get(j);
+                    if (frame.getFrameType() == FrameType.BLOCK && methodName.equals(frame.getMethodName())) {
+                        blockCount++;
+                    } else if (frame.getFrameType() == FrameType.METHOD && methodName.equals(frame.getMethodName())) {
+                        // Found the containing method, stop counting
+                        break;
+                    }
+                }
+
+                // The depth is how many blocks with same name are between us and the method (inclusive)
+                if (blockCount > 0) {
+                    trace.set(i, new RubyStackTraceElement(
+                        elem.getClassName(), elem.getMethodName(), elem.getFileName(),
+                        elem.getLineNumber(), elem.isBinding(), elem.getFrameType(), blockCount));
+                }
+            }
+        }
     }
 
     private void eachBacktrace(Map<String, Map<String, String>> boundMethods, Predicate<RubyStackTraceElement> consumer) {
@@ -116,6 +160,7 @@ public class BacktraceData implements Serializable {
                 if (mangledTuple != null) {
                     FrameType type = JavaNameMangler.decodeFrameTypeFromMangledName(mangledTuple.get(1));
                     String decodedName = JavaNameMangler.decodeMethodName(type, mangledTuple);
+                    int blockDepth = JavaNameMangler.decodeBlockDepth(type, mangledTuple);
 
                     if (decodedName != null) {
                         // skip varargs frames if we just handled the method's regular frame
@@ -130,7 +175,7 @@ public class BacktraceData implements Serializable {
                         filename = TraceType.maskInternalFiles(filename);
 
                         // construct Ruby trace element
-                        RubyStackTraceElement rubyElement = new RubyStackTraceElement(className, decodedName, filename, line, false, type);
+                        RubyStackTraceElement rubyElement = new RubyStackTraceElement(className, decodedName, filename, line, false, type, blockDepth);
 
                         // add duplicate if masking native and previous frame was native (Kernel#caller)
                         if (maskNative && dupFrame) {

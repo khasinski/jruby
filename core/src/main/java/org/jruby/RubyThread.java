@@ -534,7 +534,10 @@ public class RubyThread extends RubyObject implements ExecutionContext {
         public IRubyObject label(ThreadContext context) {
             if (element.getFrameType() == FrameType.BLOCK) {
                 // NOTE: "block in " + ... logic, now, also at RubyStackTraceElement.to_s_mri
-                if (label == null) label = newString(context, "block in " + element.getMethodName());
+                if (label == null) {
+                    String blockLabel = RubyStackTraceElement.formatBlockLabel(element.getBlockDepth());
+                    label = newString(context, blockLabel + element.getMethodName());
+                }
                 return label;
             }
 
