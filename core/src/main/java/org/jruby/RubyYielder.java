@@ -109,9 +109,9 @@ public class RubyYielder extends RubyObject {
         return block.yieldValues(context, args);
     }
 
-    @JRubyMethod(name = "<<", rest = true)
-    public IRubyObject op_lshift(ThreadContext context, IRubyObject[] args) {
-        this.yield(context, args);
+    @JRubyMethod(name = "<<")
+    public IRubyObject op_lshift(ThreadContext context, IRubyObject arg) {
+        this.yield(context, new IRubyObject[] { arg });
         return this;
     }
 
