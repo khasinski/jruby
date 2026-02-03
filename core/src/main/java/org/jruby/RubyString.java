@@ -3064,6 +3064,13 @@ public class RubyString extends RubyObject implements CharSequence, EncodingCapa
         ByteList otherBL = otherStr.getByteList();
         if (otherBL.length() < 2) throw argumentError(context, "salt too short (need >=2 bytes)");
 
+        // Check for NUL in the string
+        for (int i = value.begin(); i < value.begin() + value.realSize(); i++) {
+            if (value.unsafeBytes()[i] == 0) {
+                throw argumentError(context, "string contains null byte");
+            }
+        }
+
         POSIX posix = context.runtime.getPosix();
         byte[] keyBytes = Arrays.copyOfRange(value.unsafeBytes(), value.begin(), value.begin() + value.realSize());
         byte[] saltBytes = Arrays.copyOfRange(otherBL.unsafeBytes(), otherBL.begin(), otherBL.begin() + otherBL.realSize());
