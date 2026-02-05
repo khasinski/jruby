@@ -1403,14 +1403,14 @@ public class RubyTime extends RubyObject {
         return (int) (((dt.getMillis() / 1000) ^ getMicros()) << 1) >> 1;
     }
 
-    @JRubyMethod(name = "_dump")
+    @JRubyMethod(name = "_dump", visibility = PRIVATE)
     public RubyString dump(final ThreadContext context) {
         RubyString str = mdump(context);
         str.syncVariables(this);
         return str;
     }
 
-    @JRubyMethod(name = "_dump")
+    @JRubyMethod(name = "_dump", visibility = PRIVATE)
     public RubyString dump(final ThreadContext context, final IRubyObject arg) {
         return dump(context);
     }
@@ -2002,7 +2002,7 @@ public class RubyTime extends RubyObject {
         return s_mload(context, allocateInstance(context, (RubyClass) recv), from);
     }
 
-    @JRubyMethod(name = "_load", meta = true)
+    @JRubyMethod(name = "_load", meta = true, visibility = PRIVATE)
     public static RubyTime load(ThreadContext context, IRubyObject recv, IRubyObject from) {
         return s_mload(context, allocateInstance(context, (RubyClass) recv), from);
     }
