@@ -109,14 +109,14 @@ public class RubyIOBuffer extends RubyObject {
     @JRubyMethod(name = "for", meta = true)
     public static IRubyObject rbFor(ThreadContext context, IRubyObject self, IRubyObject _string, Block block) {
         RubyString string = _string.convertToString();
-        int flags = string.isFrozen() ? READONLY : 0;
+        int flags = (string.isFrozen() ? READONLY : 0) | EXTERNAL;
 
         // If the string is frozen, both code paths are okay.
         // If the string is not frozen, if a block is not given, it must be frozen.
         if (!block.isGiven()) {
             // This internally returns the source string if it's already frozen.
             string = string.newFrozen();
-            flags = READONLY;
+            flags = READONLY | EXTERNAL;
         } else {
             if ((flags & READONLY) != READONLY) {
                 string.modify();
@@ -287,25 +287,39 @@ public class RubyIOBuffer extends RubyObject {
 
     @JRubyMethod(name = "initialize")
     public IRubyObject initialize(ThreadContext context) {
-        return initialize(context, DEFAULT_SIZE);
+        return initializeBuffer(context, DEFAULT_SIZE, flagsForSize(DEFAULT_SIZE));
     }
 
     @JRubyMethod(name = "initialize")
-    public IRubyObject initialize(ThreadContext context, IRubyObject size) {
-        return initialize(context, toInt(context, size));
-    }
-
-    @JRubyMethod(name = "initialize")
-    public IRubyObject initialize(ThreadContext context, IRubyObject _size, IRubyObject flags) {
+    public IRubyObject initialize(ThreadContext context, IRubyObject _size) {
+        if (!(_size instanceof RubyInteger)) throw typeError(context, "not an Integer");
         int size = toInt(context, _size);
+        return initializeBuffer(context, size, flagsForSize(Math.max(size, 0)));
+    }
 
-        initialize(context, new byte[size], size, toInt(context, flags), context.nil);
+    @JRubyMethod(name = "initialize")
+    public IRubyObject initialize(ThreadContext context, IRubyObject _size, IRubyObject _flags) {
+        if (!(_size instanceof RubyInteger)) throw typeError(context, "not an Integer");
+        if (!(_flags instanceof RubyInteger)) throw typeError(context, "not an Integer");
 
-        return context.nil;
+        int flags = toInt(context, _flags);
+        if (flags < 0) throw argumentError(context, "Flags can't be negative!");
+
+        return initializeBuffer(context, toInt(context, _size), flags);
     }
 
     public IRubyObject initialize(ThreadContext context, int size) {
-        initialize(context, new byte[size], size, flagsForSize(size), context.nil);
+        return initializeBuffer(context, size, flagsForSize(Math.max(size, 0)));
+    }
+
+    private IRubyObject initializeBuffer(ThreadContext context, int size, int flags) {
+        if (size < 0) throw argumentError(context, "Size can't be negative!");
+
+        if (size == 0) {
+            initialize(context, null, 0, 0, context.nil);
+        } else {
+            initialize(context, null, size, flags, context.nil);
+        }
 
         return context.nil;
     }
@@ -578,8 +592,9 @@ public class RubyIOBuffer extends RubyObject {
 
     @JRubyMethod(name = "shared?")
     public IRubyObject shared_p(ThreadContext context) {
-        // no support for shared yet
-        return asBoolean(context, false);
+        // Note: JRuby does not implement true shared memory (mmap MAP_SHARED)
+        // semantics, but we report the flag if it was set by the user or by map().
+        return asBoolean(context, isShared());
     }
 
     private boolean isShared() {
@@ -602,6 +617,15 @@ public class RubyIOBuffer extends RubyObject {
 
     private boolean isReadonly() {
         return (flags & READONLY) == READONLY;
+    }
+
+    @JRubyMethod(name = "private?")
+    public IRubyObject private_p(ThreadContext context) {
+        return asBoolean(context, isPrivate());
+    }
+
+    private boolean isPrivate() {
+        return (flags & PRIVATE) == PRIVATE;
     }
 
     @JRubyMethod(name = "locked")
