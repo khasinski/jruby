@@ -10,6 +10,7 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.Visibility;
 import org.jruby.runtime.builtin.IRubyObject;
+import org.jruby.util.TypeConverter;
 import org.jruby.runtime.ivars.VariableAccessor;
 import org.jruby.runtime.ivars.VariableTableManager;
 import org.jruby.runtime.marshal.MarshalDumper;
@@ -229,13 +230,43 @@ public class RubyData {
         RubyHash h = newSmallHash(context);
         for (int i = 0; i < keysAry.size(); i++) {
             IRubyObject key = keysAry.eltOk(i);
-            int memberIndex = members.indexOf(key);
-            if (memberIndex == -1) {
+            int memberIndex = structPos(context, members, key);
+            if (memberIndex < 0) {
                 return h;
             }
             h.fastASetSmall(key, (IRubyObject) accessors[memberIndex].get(self));
         }
         return h;
+    }
+
+    // MRI: rb_struct_pos - resolves a key to a member index
+    private static int structPos(ThreadContext context, RubyArray<RubySymbol> members, IRubyObject key) {
+        if (key instanceof RubySymbol) {
+            return members.indexOf(key);
+        } else if (key instanceof RubyString) {
+            String name = ((RubyString) key).asJavaString();
+            for (int j = 0; j < members.size(); j++) {
+                if (members.eltOk(j).idString().equals(name)) return j;
+            }
+            return -1;
+        } else {
+            // Integer or to_int-convertible: use as positional index
+            IRubyObject converted;
+            if (key instanceof RubyInteger) {
+                converted = key;
+            } else {
+                converted = TypeConverter.convertToType(key, context.runtime.getInteger(), "to_int");
+            }
+            long idx = ((RubyInteger) converted).getLongValue();
+            long len = members.size();
+            if (idx < 0) {
+                idx += len;
+                if (idx < 0) return -1;
+            } else if (idx >= len) {
+                return -1;
+            }
+            return (int) idx;
+        }
     }
 
     @JRubyMethod(keywords = true, optional = 1, checkArity = false)
